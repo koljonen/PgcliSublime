@@ -36,4 +36,9 @@
 
 	// Regexes for file paths to exclude from autocompletion
 	"autocomplete_exclusions": [],
+
+	// Location of file used to determine what casing to use for unquoted identifiers
+	"casing_file": "",
+	// Make pgcli generate a casing file based on usage in db functions
+	"generate_casing_file": false
 }

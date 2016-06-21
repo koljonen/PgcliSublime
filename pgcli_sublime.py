@@ -405,13 +405,18 @@ def check_pgcli(view):
                 if need_new_completer:
                     refresher = CompletionRefresher()
                     refresher.refresh(executor, special=special, callbacks=(
-                        lambda c: swap_completer(c, url)))
+                        lambda c: swap_completer(c, url)),
+                    settings=_completer_settings())
 
 
 def swap_completer(new_completer, url):
     with completer_lock:
         completers[url] = new_completer
 
+
+def _completer_settings():
+    return dict((k, settings.get(k))
+        for k in ['casing_file', 'generate_casing_file'])
 
 def get(view, key):
     # Views may belong to projects which have project specific overrides
@@ -495,8 +500,9 @@ def run_sql_async(view, sql, panel):
         logger.debug('Need completions refresh')
         url = get(view, 'pgcli_url')
         refresher = CompletionRefresher()
-        refresher.refresh(executor, special=special, callbacks=(
-                          lambda c: swap_completer(c, url)))
+        refresher.refresh(executor, special=special,
+            callbacks=(lambda c: swap_completer(c, url),),
+            settings=_completer_settings())
 
     # Refresh search_path to set default schema.
     if has_change_path_cmd(sql):

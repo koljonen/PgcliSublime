@@ -89,6 +89,11 @@ def plugin_unloaded():
 
 
 class PgcliPlugin(sublime_plugin.EventListener):
+    def on_close(self, view):
+        executor = executors.pop(view.id())
+        if executor:
+            executor.conn.close()
+
     def on_post_save_async(self, view):
         check_pgcli(view)
 

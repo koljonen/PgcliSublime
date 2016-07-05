@@ -470,6 +470,13 @@ def run_sql_async(view, sql, panel):
     logger.debug('Command: PgcliExecute: %r', sql)
     save_mode = get(view, 'pgcli_save_on_run_query_mode')
 
+    try:  # Check if the connection has died
+        executor.conn.cursor().execute('select 1')
+    except psycopg2.DatabaseError:
+        pass  # psycopg2 has now marked the connection as closed
+    if executor.conn.closed:
+        logger.debug('DB connection closed; reconnecting')
+        executor.connect()
     # Make sure the output panel is visiblle
     sublime.active_window().run_command('pgcli_show_output_panel')
     # Put a leading datetime

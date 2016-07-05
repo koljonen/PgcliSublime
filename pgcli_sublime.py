@@ -20,7 +20,7 @@ except ImportError:
 completers = {}  # Dict mapping urls to pgcompleter objects
 completer_lock = Lock()
 
-executors = {}  # Dict mapping buffer ids to pgexecutor objects
+executors = {}  # Dict mapping view ids to pgexecutor objects
 executor_lock = Lock()
 
 recent_urls = []
@@ -89,6 +89,11 @@ def plugin_unloaded():
 
 
 class PgcliPlugin(sublime_plugin.EventListener):
+    def on_close(self, view):
+        executor = executors.pop(view.id())
+        if executor:
+            executor.conn.close()
+
     def on_post_save_async(self, view):
         check_pgcli(view)
 
@@ -372,8 +377,8 @@ def check_pgcli(view):
         return
 
     with executor_lock:
-        buffer_id = view.buffer_id()
-        if buffer_id not in executors:
+        view_id = view.id()
+        if view_id not in executors:
             url = get(view, 'pgcli_url')
 
             if not url:
@@ -394,7 +399,7 @@ def check_pgcli(view):
                     status = 'ERROR CONNECTING TO {}'.format(url)
                     view.set_status('pgcli', status)
 
-                executors[buffer_id] = executor
+                executors[view_id] = executor
 
                 # Make sure we have a completer for the corresponding url
                 with completer_lock:
@@ -466,10 +471,17 @@ def run_sqls_async(view, sqls):
 
 
 def run_sql_async(view, sql, panel):
-    executor = executors[view.buffer_id()]
+    executor = executors[view.id()]
     logger.debug('Command: PgcliExecute: %r', sql)
     save_mode = get(view, 'pgcli_save_on_run_query_mode')
 
+    try:  # Check if the connection has died
+        executor.conn.cursor().execute('select 1')
+    except psycopg2.DatabaseError:
+        pass  # psycopg2 has now marked the connection as closed
+    if executor.conn.closed:
+        logger.debug('DB connection closed; reconnecting')
+        executor.connect()
     # Make sure the output panel is visiblle
     sublime.active_window().run_command('pgcli_show_output_panel')
     # Put a leading datetime

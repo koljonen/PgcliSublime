@@ -90,7 +90,7 @@ def plugin_unloaded():
 
 class PgcliPlugin(sublime_plugin.EventListener):
     def on_close(self, view):
-        executor = executors.pop(view.id())
+        executor = executors.pop(view.id(), None)
         if executor:
             executor.conn.close()
 

@@ -469,32 +469,32 @@ def run_sql_async(view, sql, panel):
     executor = executors[view.id()]
     logger.debug('Command: PgcliExecute: %r', sql)
     save_mode = get(view, 'pgcli_save_on_run_query_mode')
-
-    try:  # Check if the connection has died
-        executor.conn.cursor().execute('select 1')
-    except psycopg2.DatabaseError:
-        pass  # psycopg2 has now marked the connection as closed
-    if executor.conn.closed:
-        logger.debug('DB connection closed; reconnecting')
-        executor.connect()
     # Make sure the output panel is visiblle
     sublime.active_window().run_command('pgcli_show_output_panel')
     # Put a leading datetime
     datestr = str(datetime.datetime.now()) + '\n\n'
     panel.run_command('append', {'characters': datestr, 'pos': 0})
-    results = executor.run(sql, pgspecial=special)
-    try:
-        for (title, cur, headers, status, _, _) in results:
-            fmt = format_output(title, cur, headers, status, 'psql')
-            out = ('\n'.join(fmt)
-                   + '\n\n' + str(datetime.datetime.now()) + '\n\n')
+    for attempts in range(2):
+        results = executor.run(sql, pgspecial=special)
+        try:
+            for (title, cur, headers, status, _, _) in results:
+                fmt = format_output(title, cur, headers, status, 'psql')
+                out = ('\n'.join(fmt)
+                       + '\n\n' + str(datetime.datetime.now()) + '\n\n')
+                panel.run_command('append', {'characters': out})
+        except psycopg2.DatabaseError as e:
+            success = False
+            out = str(e) + '\n\n' + str(datetime.datetime.now()) + '\n\n'
             panel.run_command('append', {'characters': out})
-    except psycopg2.DatabaseError as e:
-        success = False
-        out = str(e) + '\n\n' + str(datetime.datetime.now()) + '\n\n'
-        panel.run_command('append', {'characters': out})
-    else:
-        success = True
+            if executor.conn.closed and attempts == 0:
+                panel.run_command('append', {
+                    'characters': 'Reconnecting ...\n\n'})
+                executor.connect()
+            else:
+                break
+        else:
+            success = True
+            break
 
     if (view.file_name()
             and ((save_mode == 'always')
